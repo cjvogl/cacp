@@ -1,4 +1,4 @@
-function [X,Y,Z,Ucp,Ucacp,Uex] = shiftp_equation3(M, Nthreads) 
+function [e2,eI,numnz,condn,X,Y,Z,Ucp,Ucacp,Uex] = shiftp_equation3(M, Nthreads) 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %   Function to solve an elliptic PDE on a sphere in R^3 using the Closest 
@@ -8,6 +8,10 @@ function [X,Y,Z,Ucp,Ucacp,Uex] = shiftp_equation3(M, Nthreads)
 %   Nthreads    - number of parallel workers to use in building the
 %                  matrices
 %
+%   e2          - L2 error for both methods
+%   eI          - L-inf error for both methods
+%   numnz       - number of non-zeros for both methods
+%   condn       - condition number estimate for both methods
 %   (X,Y,Z)     - meshgrid for plotting purposes
 %   Ucp         - Closest Point method solution
 %   Ucacp       - Curvature-Augmented Closest Point solution
@@ -61,7 +65,7 @@ function [X,Y,Z,Ucp,Ucacp,Uex] = shiftp_equation3(M, Nthreads)
     clear Phi Nx Ny Nz Kappa H
     
     % Parallelize if specified
-    if (nargin >= 3)
+    if (nargin >= 2)
         Lbreak = [0 (1:Nthreads-1)*floor(L/Nthreads) L];
     
         pool = gcp('nocreate');
@@ -114,10 +118,8 @@ function [X,Y,Z,Ucp,Ucacp,Uex] = shiftp_equation3(M, Nthreads)
     uex = cos(3*theta).*sin(psi).^3.*(9*cos(psi).^2 - 1);    
     e2 = [sqrt(sum((ucp-uex).^2)/length(uex)) sqrt(sum((ucacp-uex).^2)/length(uex))];
     eI = [max(abs(ucp-uex)) max(abs(ucacp-uex))];
-    
-    fprintf('L-2 error (old vs new): %e vs %e\n', e2(1), e2(2));
-    fprintf('L-inf error (old vs new): %e vs %e\n', eI(1), eI(2));
-    fprintf('Non-zeros (old vs new): %d vs %d\n\n', nnz(A), nnz(Acacp));
+    numnz = [nnz(A) nnz(Acacp)];
+    condn = [condest(A) condest(Acacp)];
 
     Ucp = zeros(size(X));
     Ucp(ind) = ucp;
@@ -237,16 +239,16 @@ function [Eh1,Eh3,Lh,Acacp,bcp,bcacp] = buildSystem(start,stop,x,y,z,cval,ind,in
             flag = 0;
             while (tmpind > 0 && Eh3(tmpind,1) == iter)
                 nAsh = nAsh + 1;
-                Acacp(nAsh,:) = [Eh3(tmpind,1:2), -Eh3(tmpind,3)];
+                Acacp(nAsh,:) = [Eh3(tmpind,1:2), -6/dx^2*Eh3(tmpind,3)];
                 if (Eh3(tmpind,2) == iter)
-                    Acacp(nAsh,3) = Acacp(nAsh,3) + 1.0;
+                    Acacp(nAsh,3) = Acacp(nAsh,3) + 6/dx^2;
                     flag = 1;
                 end
                 tmpind = tmpind - 1;
             end
             if (flag == 0)
                 nAsh = nAsh + 1;
-                Acacp(nAsh,:) = [iter, iter, 1.0];
+                Acacp(nAsh,:) = [iter, iter, 6/dx^2];
             end
             bcacp(iter-start+1) = 0.0;
         else

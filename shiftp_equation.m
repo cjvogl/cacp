@@ -1,4 +1,4 @@
-function [X,Y,Ucp,Ucacp,Uex] = shiftp_equation(M, type) 
+function [e2,eI,numnz,condn,X,Y,Ucp,Ucacp,Uex] = shiftp_equation(M, type) 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %   Function to solve an elliptic PDE in R^2 using the Closest Point and 
@@ -7,6 +7,10 @@ function [X,Y,Ucp,Ucacp,Uex] = shiftp_equation(M, type)
 %   M       - number of grid cells in one direction
 %   type    - specify surface type: 1 for a circle, 2 for a clover
 %
+%   e2      - L2 error for both methods
+%   eI      - L-inf error for both methods
+%   numnz   - number of non-zeros for both methods
+%   condn   - condition number estimate for both methods
 %   (X,Y)   - meshgrid for plotting purposes
 %   Ucp     - Closest Point method solution
 %   Ucacp   - Curvature-Augmented Closest Point solution
@@ -31,7 +35,6 @@ function [X,Y,Ucp,Ucacp,Uex] = shiftp_equation(M, type)
     %initialize grid
     [X,Y] = meshgrid(linspace(-2,2,M+1),linspace(-2,2,M+1));
     dx = X(1,2)-X(1,1);
-    fprintf('\ndx = %f\n',dx);
 
     [phi, nx, ny, kappa] = sdf(X,Y);
      
@@ -119,8 +122,8 @@ function [X,Y,Ucp,Ucacp,Uex] = shiftp_equation(M, type)
         % so set to identity
         if (cval(k) == 2)
             Lh(iter,iter) = 1.0;
-            Acacp(iter,:) = -Eh3(iter,:);
-            Acacp(iter,iter) = Acacp(iter,iter) + 1.0;
+            Acacp(iter,:) = -4/dx^2*Eh3(iter,:);
+            Acacp(iter,iter) = Acacp(iter,iter) + 4/dx^2;
             bcacp(iter) = 0.0;
         else
             Acacp(iter,iter) = 1.0 + (1+kappa(k)*phi(k))*(4.0 + ...
@@ -178,11 +181,9 @@ function [X,Y,Ucp,Ucacp,Uex] = shiftp_equation(M, type)
     uex = sin(atan2(ycp,xcp)) + sin(12*atan2(ycp,xcp));
     e2 = [sqrt(sum((uCP-uex).^2)/length(uex)) sqrt(sum((unew-uex).^2)/length(uex))];
     eI = [max(abs(uCP-uex)) max(abs(unew-uex))];
-    
-    fprintf('L-2 error (CP vs CACP): %e vs %e\n', e2(1), e2(2));
-    fprintf('L-inf error (CP vs CACP): %e vs %e\n', eI(1), eI(2));
-    fprintf('Non-zeros (CP vs CACP): %d vs %d\n\n', nnz(A), nnz(Acacp));
-    
+    numnz = [nnz(A) nnz(Acacp)];
+    condn = [condest(A) condest(Acacp)];
+       
     Ucp = zeros(size(X));
     Ucp(ind) = uCP;
     Ucacp = zeros(size(X));
